@@ -1,0 +1,12 @@
+{
+  "name": "@chaotic-gaming/7dtd-server-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure external Web API and Server-Sent Events bridge for 7 Days to Die dedicated servers.",
+  "type": "module",
+  "engines": { "node": ">=20.9.0" },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/client.js && node --check src/sse.js"
+  }
+}
