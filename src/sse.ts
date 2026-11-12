@@ -63,10 +63,14 @@ export async function* parseSse(
 
         if (field === "event") event = valueText;
         else if (field === "data") data.push(valueText);
-        else if (field === "id" && !valueText.includes("\0")) id = valueText;
-        else if (field === "retry" && /^\d+$/.test(valueText)) retry = Number(valueText);
+        else if (field === "id" && !valueText.includes("\\0")) id = valueText;
+        else if (field === "retry" && /^\\d+$/.test(valueText)) retry = Number(valueText);
       }
     }
+    buffer += decoder.decode();
+    if (buffer.length > 0 && data.length > 0) data.push(buffer);
+    const finalMessage = dispatch();
+    if (finalMessage) yield finalMessage;
   } finally {
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();

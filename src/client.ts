@@ -56,7 +56,6 @@ export class SdtDClient {
     });
 
     if (!response.ok) {
-      // Do not include response bodies: some servers echo sensitive request details.
       throw new SdtDHttpError(
         `7 Days to Die API request failed with HTTP ${response.status}`,
         response.status,
@@ -74,9 +73,11 @@ export class SdtDClient {
       headers.set("X-SDTD-API-SECRET", this.config.tokenSecret);
     }
 
-    const timeout = AbortSignal.timeout(this.config.requestTimeoutMs);
-    const combinedSignal = signal ? AbortSignal.any([timeout, signal]) : timeout;
-    const response = await this.fetchImpl(url, { headers, signal: combinedSignal });
+    // SSE is intentionally long-lived: the caller owns cancellation/reconnection.
+    const response = await this.fetchImpl(url, {
+      headers,
+      ...(signal ? { signal } : {}),
+    });
     if (!response.ok) {
       throw new SdtDHttpError(
         `7 Days to Die event stream failed with HTTP ${response.status}`,
