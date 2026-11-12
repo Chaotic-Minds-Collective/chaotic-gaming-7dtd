@@ -35,6 +35,7 @@ export class SevenDaysWebApiClient {
     tokenName,
     tokenSecret,
     timeoutMs = 10_000,
+    allowInsecureHttp = false,
     fetchImpl = globalThis.fetch
   }) {
     if (!baseUrl) throw new TypeError("baseUrl is required");
@@ -43,6 +44,10 @@ export class SevenDaysWebApiClient {
       throw new TypeError("timeoutMs must be an integer between 1 and 120000");
     }
 
+    if (typeof allowInsecureHttp !== "boolean") {
+      throw new TypeError("allowInsecureHttp must be a boolean");
+    }
+    this.allowInsecureHttp = allowInsecureHttp;
     this.baseUrl = normalizeBaseUrl(baseUrl);
     this.tokenName = tokenName;
     this.tokenSecret = tokenSecret;
@@ -61,7 +66,11 @@ export class SevenDaysWebApiClient {
     if (cleanPath.split("/").some((part) => part === "..")) {
       throw new TypeError("path traversal is not allowed");
     }
-    return new URL(cleanPath, this.baseUrl);
+    const url = new URL(cleanPath, this.baseUrl);
+    if (url.origin !== this.baseUrl.origin) {
+      throw new TypeError("resolved URL must stay on the configured origin");
+    }
+    return url;
   }
 
   buildHeaders(extraHeaders = {}) {
@@ -80,6 +89,10 @@ export class SevenDaysWebApiClient {
   async request(path, { method = "GET", body, headers = {}, signal } = {}) {
     const url = this.buildUrl(path);
     const requestHeaders = this.buildHeaders(headers);
+    if (url.protocol === "http:" && !this.allowInsecureHttp &&
+        (requestHeaders.has("X-SDTD-API-TOKENNAME") || requestHeaders.has("X-SDTD-API-SECRET"))) {
+      throw new TypeError("API token headers require HTTPS; allowInsecureHttp is for development only");
+    }
     let requestBody = body;
 
     if (body !== undefined && body !== null && typeof body !== "string" && !(body instanceof ArrayBuffer)) {
@@ -96,6 +109,7 @@ export class SevenDaysWebApiClient {
         method,
         headers: requestHeaders,
         body: requestBody,
+        redirect: "error",
         signal: combinedSignal
       });
     } catch (cause) {

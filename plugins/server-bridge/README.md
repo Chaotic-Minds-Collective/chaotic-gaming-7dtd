@@ -10,7 +10,15 @@ The client supports the game's named API-token headers:
 - `X-SDTD-API-TOKENNAME`
 - `X-SDTD-API-SECRET`
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:0d73abee7e031762c73aa54d8a3a837e84ea66138ea3f9dad8ed13bb73d30adb -->
+
 Treat the secret as a password. Store it in server-side environment variables or a secret manager. Never expose it to the browser, Discord client, or repository.
+
+Requests carrying either API token header require HTTPS by default, including when headers are supplied per request. For local development only, explicitly set the constructor option `allowInsecureHttp: true` to permit plaintext HTTP; this exposes tokens to network observers. Unauthenticated HTTP remains supported. Requests reject redirects to prevent token forwarding; configure the final API URL directly. Resolved endpoint URLs must stay on the configured origin.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Usage
 ```js
