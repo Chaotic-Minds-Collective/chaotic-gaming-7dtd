@@ -1,0 +1,47 @@
+{
+  "id": "com.chaoticgaming.7dtd-heartbeat",
+  "name": "Chaotic Gaming 7 Days to Die Heartbeat Agent",
+  "version": "0.1.0",
+  "game": "7dtd",
+  "apiVersion": "1",
+  "dependencies": [],
+  "capabilities": [
+    "server.heartbeat",
+    "server.player-count"
+  ],
+  "permissions": [
+    "servers.heartbeat"
+  ],
+  "compatibility": {
+    "gameBuilds": [],
+    "serverApi": [],
+    "operatingSystems": []
+  },
+  "configSchema": {
+    "type": "object",
+    "required": [
+      "serverId",
+      "queryHost",
+      "queryPort"
+    ],
+    "properties": {
+      "serverId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "queryHost": {
+        "type": "string"
+      },
+      "queryPort": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 65535
+      },
+      "heartbeatIntervalMs": {
+        "type": "integer",
+        "minimum": 30000,
+        "maximum": 300000
+      }
+    }
+  }
+}

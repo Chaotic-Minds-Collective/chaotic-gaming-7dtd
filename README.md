@@ -1,36 +1,27 @@
-# Chaotic Gaming — 7 Days to Die Adapter
+# Chaotic Gaming 7 Days to Die Adapter
 
-Game-specific integration for 7 Days to Die. The adapter communicates with Chaotic Gaming Core through authenticated APIs and must not access Core's PostgreSQL database directly.
+A standalone heartbeat agent for the 7 Days to Die dedicated server. It queries the server with GameDig and reports status to the Chaotic Gaming Core.
 
-## Planned capabilities
+## Included
+- Game-specific GameDig query type: `7d2d`.
+- Server-scoped authenticated heartbeat to Core.
+- Skips a heartbeat when the game query fails instead of falsely reporting the server offline.
+- Runs independently from the Discord bot and website.
 
-- Server registration and health heartbeats
-- Player identity mapping and session lifecycle
-- World/server status and validated server events
-- Configuration and administrative operations behind scoped permissions
-- Purchase entitlement delivery only after server-side payment confirmation
+## Not implemented yet
+This is the first monitoring bridge, **not an in-game mod**. It does not yet read game events, modify inventories, deliver purchased items, install mods or execute administrative commands. Those features require verified server-side APIs and isolated compatibility testing for the exact game build.
 
-## Existing integration foundation
+## Setup
+1. Register the dedicated game server in Core using the Core server-registration instructions.
+2. Create a service account scoped to that exact server UUID:
+   `npm run service:create -- 7dtd-adapter --role server_heartbeat --scope-type server --scope-id <SERVER_UUID>`
+3. Copy the generated token once into the local secret environment. Never commit it.
+4. Copy `.env.example` to `.env` and set the Core URL, token, server UUID, query host/port and exact server build.
+5. Run `npm install`, `npm test`, then `npm start`.
 
-The `plugins/server-bridge` module is the primary integration path. It provides a dependency-free client for the dedicated server's Web API and a Server-Sent Events parser. Endpoint paths are deliberately supplied by the operator from the OpenAPI/RapiDoc documentation exposed by the exact running server build. The adapter does not assume endpoint paths or event names from another version.
-
-## Core integration
-
-The root adapter package adds a Core heartbeat process and a restricted Telnet health-check client. Telnet is optional and is not the preferred integration path for game data. Keep it bound to loopback or a private management network, set a strong password, and never expose it publicly. Only a short allowlist of read-only commands is enabled.
-
-## Development
-
-- Node.js 22+
-- `npm install`
-- `npm test`
-- `npm run check`
-
-The nested `plugins/server-bridge` module can also be tested independently with `npm --prefix plugins/server-bridge test`.
-
-## Compatibility
-
-Do not assume a particular 7DTD version, server manager, mod loader, Web API endpoint, SSE event name, or RCON/Telnet command set. Record exact versions and validate against a disposable server before claiming support.
-
-## Status
-
-The Web API/SSE client foundation and optional Telnet heartbeat helper are committed with automated tests. No live server has been connected, configured, or modified.
+## Security
+- The service token must have only `servers.heartbeat` for one server.
+- Do not expose query ports publicly unless the game requires it.
+- Never place the service token in browser code, game clients or Discord.
+- Use HTTPS for Core API communication in production.
+- Do not point the agent at production until server registration and compatibility testing are approved.
