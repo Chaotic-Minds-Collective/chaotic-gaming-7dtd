@@ -59,7 +59,7 @@ const flushTimer = setInterval(() => {
 let retryMs = 1_000;
 let lastEventId = await cursor.load();
 while (!controller.signal.aborted) {
-  const connectionStartedAt = Date.now();
+  const connectionStartedAt = performance.now();
   try {
     const flushed = await spool.flush((event) => publisher.publish(event));
     if (flushed.pending > 0) {
@@ -85,13 +85,13 @@ while (!controller.signal.aborted) {
     }) ?? lastEventId;
 
     if (controller.signal.aborted) break;
-    const durationMs = Date.now() - connectionStartedAt;
+    const durationMs = performance.now() - connectionStartedAt;
     retryMs = nextReconnectDelay(retryMs, durationMs);
     console.warn(`[7DTD Bridge] Event stream closed; reconnecting in ${retryMs}ms.`);
     await waitForReconnect(retryMs, controller.signal);
   } catch (error) {
     if (controller.signal.aborted) break;
-    const durationMs = Date.now() - connectionStartedAt;
+    const durationMs = performance.now() - connectionStartedAt;
     retryMs = nextReconnectDelay(retryMs, durationMs);
     console.error(`[7DTD Bridge] Stream interrupted; retrying in ${retryMs}ms:`, error.message);
     await waitForReconnect(retryMs, controller.signal);

@@ -9,6 +9,13 @@ const ALLOWED_EVENT_TYPES = new Set([
 const SERVER_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_EVENT_BYTES = 900_000;
 
+export class CoreEventValidationError extends TypeError {
+  constructor(message) {
+    super(message);
+    this.name = "CoreEventValidationError";
+  }
+}
+
 export class CorePublisherError extends Error {
   constructor(message, { status = 0, code = "CORE_PUBLISH_FAILED" } = {}) {
     super(message);
@@ -32,7 +39,7 @@ export class CoreEventPublisher {
 
     const parsed = new URL(baseUrl);
     const localHttp = parsed.protocol === "http:" &&
-      ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+      ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
     if (parsed.username || parsed.password) {
       throw new TypeError("Do not embed credentials in CORE_API_BASE_URL.");
     }
@@ -80,18 +87,18 @@ export class CoreEventPublisher {
 
   async publish(event) {
     if (!event || typeof event.eventId !== "string" || !event.eventId.trim() || event.eventId.length > 200) {
-      throw new TypeError("A provider event ID is required for idempotent publishing.");
+      throw new CoreEventValidationError("A provider event ID is required for idempotent publishing.");
     }
     if (!ALLOWED_EVENT_TYPES.has(event.eventType)) {
-      throw new TypeError("Unsupported normalized game event type.");
+      throw new CoreEventValidationError("Unsupported normalized game event type.");
     }
     const occurredAt = new Date(event.occurredAt);
     if (!event.occurredAt || Number.isNaN(occurredAt.getTime())) {
-      throw new TypeError("A valid event timestamp is required.");
+      throw new CoreEventValidationError("A valid event timestamp is required.");
     }
     const payload = event.payload ?? {};
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      throw new TypeError("Event payload must be an object.");
+      throw new CoreEventValidationError("Event payload must be an object.");
     }
 
     const body = {
@@ -102,7 +109,7 @@ export class CoreEventPublisher {
       payload,
     };
     if (Buffer.byteLength(JSON.stringify(body), "utf8") > MAX_EVENT_BYTES) {
-      throw new TypeError("Normalized event exceeds the maximum Core API payload size.");
+      throw new CoreEventValidationError("Normalized event exceeds the maximum Core API payload size.");
     }
 
     let response;
