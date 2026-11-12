@@ -59,13 +59,14 @@ const flushTimer = setInterval(() => {
 let retryMs = 1_000;
 let lastEventId = await cursor.load();
 while (!controller.signal.aborted) {
-  const connectionStartedAt = performance.now();
+  let connectionStartedAt;
   try {
     const flushed = await spool.flush((event) => publisher.publish(event));
     if (flushed.pending > 0) {
       console.warn(`[7DTD Bridge] ${flushed.pending} event(s) remain queued for Core.`);
     }
 
+    connectionStartedAt = performance.now();
     lastEventId = await bridgeServerEvents({
       apiClient,
       endpoint: process.env.SDTD_SSE_ENDPOINT,
@@ -91,7 +92,7 @@ while (!controller.signal.aborted) {
     await waitForReconnect(retryMs, controller.signal);
   } catch (error) {
     if (controller.signal.aborted) break;
-    const durationMs = performance.now() - connectionStartedAt;
+    const durationMs = connectionStartedAt === undefined ? 0 : performance.now() - connectionStartedAt;
     retryMs = nextReconnectDelay(retryMs, durationMs);
     console.error(`[7DTD Bridge] Stream interrupted; retrying in ${retryMs}ms:`, error.message);
     await waitForReconnect(retryMs, controller.signal);
