@@ -2,6 +2,7 @@ import "dotenv/config";
 import { SevenDaysWebApiClient } from "./client.js";
 import { CoreEventPublisher } from "./core-publisher.js";
 import { DurableEventSpool } from "./event-spool.js";
+import { EventCursor } from "./event-cursor.js";
 import { bridgeServerEvents } from "./event-bridge.js";
 
 const required = [
@@ -39,12 +40,14 @@ const publisher = new CoreEventPublisher({
   serverId: process.env.CORE_SERVER_ID,
 });
 const spool = new DurableEventSpool(process.env.CORE_EVENT_SPOOL_PATH || "./data/core-events.jsonl");
+const cursor = new EventCursor(process.env.SDTD_EVENT_CURSOR_PATH || "./data/last-event-id.txt");
 
 const controller = new AbortController();
 process.on("SIGINT", () => controller.abort(new Error("SIGINT")));
 process.on("SIGTERM", () => controller.abort(new Error("SIGTERM")));
 
 let retryMs = 1_000;
+let lastEventId = await cursor.load();
 while (!controller.signal.aborted) {
   try {
     const flushed = await spool.flush((event) => publisher.publish(event));
@@ -52,15 +55,17 @@ while (!controller.signal.aborted) {
       console.warn(`[7DTD Bridge] ${flushed.pending} event(s) remain queued for Core.`);
     }
 
-    await bridgeServerEvents({
+    lastEventId = await bridgeServerEvents({
       apiClient,
       endpoint: process.env.SDTD_SSE_ENDPOINT,
       eventMap,
       publisher,
       spool,
       signal: controller.signal,
+      lastEventId,
+      saveCursor: (eventId) => cursor.save(eventId),
       onSkipped: (info) => console.warn("[7DTD Bridge] Event skipped:", info.reason, info.sourceType),
-    });
+    }) ?? lastEventId;
     retryMs = 1_000;
   } catch (error) {
     if (controller.signal.aborted) break;

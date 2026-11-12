@@ -7,6 +7,7 @@ import { SevenDaysWebApiClient } from "../src/client.js";
 import { openServerEventStream } from "../src/stream.js";
 import { CoreEventPublisher } from "../src/core-publisher.js";
 import { DurableEventSpool } from "../src/event-spool.js";
+import { EventCursor } from "../src/event-cursor.js";
 
 test("opens a documented SSE endpoint with named API token headers", async () => {
   let captured;
@@ -26,6 +27,43 @@ test("opens a documented SSE endpoint with named API token headers", async () =>
   assert.equal(captured.options.headers.get("X-SDTD-API-TOKENNAME"), "bridge");
   assert.equal(captured.options.headers.get("X-SDTD-API-SECRET"), "synthetic-secret");
   assert.equal(captured.options.redirect, "error");
+});
+
+test("SSE response streams stay open after the connection timeout elapses", async () => {
+  const client = new SevenDaysWebApiClient({
+    baseUrl: "https://server.example.test/",
+    tokenName: "bridge",
+    tokenSecret: "synthetic-secret",
+    timeoutMs: 20,
+    fetchImpl: async () => new Response(new ReadableStream({
+      start(controller) {
+        setTimeout(() => {
+          controller.enqueue(new TextEncoder().encode("data: still-open\n\n"));
+          controller.close();
+        }, 80);
+      },
+    }), { status: 200 }),
+  });
+  const stream = await openServerEventStream(client, "/events");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const reader = stream.getReader();
+  const result = await reader.read();
+  assert.match(new TextDecoder().decode(result.value), /still-open/);
+});
+
+test("sends Last-Event-ID when resuming an SSE stream", async () => {
+  let capturedHeaders;
+  const client = new SevenDaysWebApiClient({
+    baseUrl: "https://server.example.test/",
+    tokenName: "bridge",
+    tokenSecret: "synthetic-secret",
+    fetchImpl: async (_url, options) => {
+      capturedHeaders = options.headers;
+      return new Response(new ReadableStream({ start(controller) { controller.close(); } }), { status: 200 });
+    },
+  });
+  await openServerEventStream(client, "/events", { lastEventId: "event-123" });
+  assert.equal(capturedHeaders.get("Last-Event-ID"), "event-123");
 });
 
 test("rejects token-authenticated event streams over HTTP", async () => {
@@ -91,6 +129,19 @@ test("durably queues events and retains undelivered events on Core failure", asy
 
     const remaining = JSON.parse((await readFile(filePath, "utf8")).trim());
     assert.equal(remaining.eventId, "2");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("persists the last acknowledged provider event cursor", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "cg-event-cursor-"));
+  const filePath = join(directory, "last-event-id.txt");
+  try {
+    const cursor = new EventCursor(filePath);
+    assert.equal(await cursor.load(), undefined);
+    await cursor.save("event-123");
+    assert.equal(await cursor.load(), "event-123");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

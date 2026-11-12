@@ -33,9 +33,12 @@ export async function bridgeServerEvents({
   publisher,
   spool,
   signal,
+  lastEventId,
+  saveCursor = async () => {},
   onSkipped = () => {},
 }) {
-  const stream = await openServerEventStream(apiClient, endpoint, { signal });
+  const stream = await openServerEventStream(apiClient, endpoint, { signal, lastEventId });
+  let cursor = lastEventId;
   for await (const sourceEvent of parseServerSentEvents(stream, { signal })) {
     const eventType = eventMap[sourceEvent.event];
     if (!eventType || !ALLOWED_EVENT_TYPES.has(eventType)) {
@@ -58,6 +61,9 @@ export async function bridgeServerEvents({
       occurredAt,
       payload,
     });
+    cursor = sourceEvent.id;
+    await saveCursor(cursor);
     await spool.flush((event) => publisher.publish(event));
   }
+  return cursor;
 }

@@ -2,9 +2,10 @@ import { SevenDaysApiError } from "./client.js";
 
 /**
  * Open a Server-Sent Events endpoint documented by the exact running server.
- * The caller owns parsing, reconnects, and cancellation.
+ * The connection timeout applies only until response headers arrive; the
+ * returned stream remains open until the caller aborts or the server closes it.
  */
-export async function openServerEventStream(client, path, { signal } = {}) {
+export async function openServerEventStream(client, path, { signal, lastEventId } = {}) {
   if (!client || typeof client.buildUrl !== "function" || typeof client.buildHeaders !== "function") {
     throw new TypeError("A SevenDaysWebApiClient instance is required.");
   }
@@ -15,9 +16,13 @@ export async function openServerEventStream(client, path, { signal } = {}) {
       (headers.has("X-SDTD-API-TOKENNAME") || headers.has("X-SDTD-API-SECRET"))) {
     throw new TypeError("API token headers require HTTPS; allowInsecureHttp is for development only");
   }
+  if (lastEventId) headers.set("Last-Event-ID", lastEventId);
 
-  const timeoutSignal = AbortSignal.timeout(client.timeoutMs);
-  const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+  const connectionController = new AbortController();
+  const connectionTimer = setTimeout(() => connectionController.abort(), client.timeoutMs);
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, connectionController.signal])
+    : connectionController.signal;
 
   let response;
   try {
@@ -29,6 +34,8 @@ export async function openServerEventStream(client, path, { signal } = {}) {
     });
   } catch (cause) {
     throw new SevenDaysApiError("7 Days to Die event stream request failed", { cause });
+  } finally {
+    clearTimeout(connectionTimer);
   }
 
   if (!response.ok) {
