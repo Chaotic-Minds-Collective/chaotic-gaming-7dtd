@@ -146,18 +146,13 @@ export class SevenDaysTelnetClient {
 
       const authentication = await waitForText(
         socket,
-        (text) => /logon successful\.|password incorrect|too many failed login attempts/i.test(text),
+        (text) => /password incorrect|too many failed login attempts/i.test(text)
+          || (/logon successful\./i.test(text) && /press 'help' to get a list of all commands/i.test(text)),
         commandTimeoutMs
       );
       if (!/logon successful\./i.test(authentication)) {
         throw new Error("7DTD Telnet authentication failed.");
       }
-
-      await waitForText(
-        socket,
-        (text) => /press 'help' to get a list of all commands/i.test(text),
-        commandTimeoutMs
-      );
 
       return await collectCommandOutput(socket, command, {
         quietMs,
