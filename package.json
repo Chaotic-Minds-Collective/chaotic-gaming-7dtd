@@ -1,17 +1,16 @@
 {
   "name": "@chaotic-gaming/7dtd-adapter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "type": "commonjs",
-  "engines": {
-    "node": ">=20.9.0"
-  },
+  "type": "module",
+  "engines": { "node": ">=22" },
   "scripts": {
-    "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "check": "node --check src/telnet/client.js && node --check src/core/heartbeat.js && node --check src/run-heartbeat.js && npm --prefix plugins/server-bridge run check",
+    "heartbeat": "node src/run-heartbeat.js",
+    "bridge": "npm --prefix plugins/server-bridge run bridge"
   },
   "dependencies": {
-    "dotenv": "^16.4.7",
-    "gamedig": "^5.1.0"
+    "dotenv": "^16.4.7"
   }
 }
