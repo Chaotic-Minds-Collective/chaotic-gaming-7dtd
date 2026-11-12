@@ -14,17 +14,21 @@ async function withFakeTelnet(handler, run) {
   }
 }
 
-test("authenticates to the Telnet password prompt and runs an allowlisted read-only command", async () => {
+test("authenticates to the Telnet prompt and runs an allowlisted read-only command", async () => {
   await withFakeTelnet((socket) => {
     socket.write("Please enter password:\r\n");
     let input = "";
+    let authenticated = false;
+    let commandSent = false;
     socket.on("data", (chunk) => {
       input += chunk.toString();
-      if (input.includes("secret\n") && !input.includes("Logon successful")) {
-        socket.write("Logon successful.\r\n*** Connected with 7DTD server.\r\n");
+      if (!authenticated && input.includes("secret\n")) {
+        authenticated = true;
+        socket.write("Logon successful.\r\n*** Connected with 7DTD server.\r\nPress 'help' to get a list of all commands.\r\n");
       }
-      if (input.includes("gettime\n")) {
-        socket.write("Day 3, 07:00\r\n");
+      if (authenticated && !commandSent && input.includes("gettime\n")) {
+        commandSent = true;
+        setTimeout(() => socket.write("Day 3, 07:00\r\n"), 10);
       }
       if (input.includes("exit\n")) socket.end();
     });

@@ -37,6 +37,15 @@ function waitForText(socket, predicate, timeoutMs) {
   });
 }
 
+function cleanCommandOutput(output) {
+  return output
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/^Logon successful\.\s*$/gim, "")
+    .replace(/^\*{3} Connected with 7DTD server\.\s*$/gim, "")
+    .replace(/^Press 'help' to get a list of all commands\.\s*$/gim, "")
+    .trim();
+}
+
 function collectCommandOutput(socket, command, { quietMs, timeoutMs, maxOutputBytes }) {
   return new Promise((resolve, reject) => {
     let output = "";
@@ -50,7 +59,7 @@ function collectCommandOutput(socket, command, { quietMs, timeoutMs, maxOutputBy
     };
     const finish = () => {
       cleanup();
-      resolve(output.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "").trim());
+      resolve(cleanCommandOutput(output));
     };
     const onData = (chunk) => {
       output += chunk.toString("utf8");
@@ -59,8 +68,11 @@ function collectCommandOutput(socket, command, { quietMs, timeoutMs, maxOutputBy
         reject(new Error("7DTD Telnet response exceeded the configured size limit."));
         return;
       }
-      clearTimeout(quietTimer);
-      quietTimer = setTimeout(finish, quietMs);
+      const cleaned = cleanCommandOutput(output);
+      if (cleaned) {
+        clearTimeout(quietTimer);
+        quietTimer = setTimeout(finish, quietMs);
+      }
     };
     const onError = (error) => {
       cleanup();
@@ -81,7 +93,7 @@ function collectCommandOutput(socket, command, { quietMs, timeoutMs, maxOutputBy
         reject(error);
       }
     });
-    quietTimer = setTimeout(finish, quietMs);
+    quietTimer = setTimeout(finish, timeoutMs);
   });
 }
 
@@ -140,6 +152,12 @@ export class SevenDaysTelnetClient {
       if (!/logon successful\./i.test(authentication)) {
         throw new Error("7DTD Telnet authentication failed.");
       }
+
+      await waitForText(
+        socket,
+        (text) => /press 'help' to get a list of all commands/i.test(text),
+        commandTimeoutMs
+      );
 
       return await collectCommandOutput(socket, command, {
         quietMs,
