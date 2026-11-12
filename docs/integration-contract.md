@@ -1,3 +1,14 @@
 # 7 Days to Die Integration Contract
 
-Isolate version-specific server communication behind a stable internal interface. Record exact game/server version, protocol or API, authentication model, event coverage and rate limits before implementation. Start read-only. Administrative commands must be permission-scoped, audited, rate-limited and safe to retry. Do not assume an interface or command exists until confirmed against the target server version.
+The adapter must implement the shared SDK's game adapter health and event contracts.
+
+Required behaviors:
+- Authenticate as a dedicated service identity.
+- Identify its assigned server and environment.
+- Send heartbeats with server version and adapter version.
+- Normalize player join/leave and server lifecycle events.
+- Use idempotency keys when reporting events or delivering rewards.
+- Reject commands outside its assigned server scope.
+- Buffer transient event delivery failures locally with bounded retry/backoff.
+
+Exact game hooks and command mappings remain version-dependent and must be validated in a test server.
