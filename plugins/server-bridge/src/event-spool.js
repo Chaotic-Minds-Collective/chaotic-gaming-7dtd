@@ -3,8 +3,12 @@ import { CoreEventValidationError } from "./core-publisher.js";
 import { dirname } from "node:path";
 
 export class DurableEventSpool {
-  constructor(filePath, { maxEvents = 10_000, maxBytes = 50 * 1024 * 1024 } = {}) {
+  constructor(filePath, { maxEvents = 10_000, maxBytes = 50 * 1024 * 1024, maxQuarantineBytes = 50 * 1024 * 1024 } = {}) {
     if (!filePath) throw new TypeError("A local event spool path is required.");
+    if (!Number.isSafeInteger(maxQuarantineBytes) || maxQuarantineBytes < 1) {
+      throw new TypeError("maxQuarantineBytes must be a positive safe integer.");
+    }
+    this.maxQuarantineBytes = maxQuarantineBytes;
     this.filePath = filePath;
     this.quarantinePath = `${filePath}.quarantine.jsonl`;
     this.maxEvents = maxEvents;
@@ -73,10 +77,20 @@ export class DurableEventSpool {
             pending.push(...lines.slice(index));
             break;
           }
+          let quarantineBytes = 0;
+          try {
+            quarantineBytes = (await stat(this.quarantinePath)).size;
+          } catch (quarantineError) {
+            if (quarantineError?.code !== "ENOENT") throw quarantineError;
+          }
+          const quarantineLine = `${lines[index]}\n`;
+          if (quarantineBytes + Buffer.byteLength(quarantineLine, "utf8") > this.maxQuarantineBytes) {
+            throw new Error("Core event quarantine reached its size limit; pending events retained. Archive or remove quarantine entries before retrying.");
+          }
           // Persist before removing from pending. A failed write leaves the queue intact.
-          await appendFile(this.quarantinePath, `${lines[index]}\n`, { encoding: "utf8", mode: 0o600 });
+          await appendFile(this.quarantinePath, quarantineLine, { encoding: "utf8", mode: 0o600 });
           await chmod(this.quarantinePath, 0o600);
-          console.warn("[7DTD Bridge] Quarantined Core event:", event.eventId);
+          console.warn("[7DTD Bridge] Quarantined Core event:", event?.eventId ?? "(missing event ID)");
         }
       }
 

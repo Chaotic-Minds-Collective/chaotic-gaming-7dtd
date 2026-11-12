@@ -23,7 +23,15 @@ The bridge:
 - Retries queued events when Core is temporarily unavailable.
 - Publishes through a dedicated server-scoped Core service credential.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:48b7115750bc78927084d29ac387c1da5f315342c494f3b1ff3352f11aa48f8c -->
+
 The spool defaults to `./data/core-events.jsonl`. Keep the data directory private to the service account; it may contain player event payloads. The queue has event and byte limits and refuses new events rather than silently dropping old ones.
+
+Locally invalid events are saved in `<spool path>.quarantine.jsonl` before removal from the pending queue. Quarantine is capped at 50 MiB by default; callers of `DurableEventSpool` can configure `maxQuarantineBytes` as a positive integer byte limit. The limit includes UTF-8 JSON and newline bytes and survives restarts. If an append would exceed the limit, flushing fails with a clear error and leaves the pending spool intact. Stop the bridge, archive or remove quarantine entries, then restart to resume delivery; entries are never automatically discarded.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Setup
 

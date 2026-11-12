@@ -86,3 +86,68 @@ test("rejected SSE responses cancel bodies and preserve HTTP errors if cancellat
     assert.equal(cancelled, true);
   }
 });
+
+test("quarantine cap counts UTF-8 bytes and newline, persists across restart and retains pending on retries", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "repair-cap-"));
+  try {
+    const path = join(directory, "events.jsonl");
+    const invalid = { eventId: "é" };
+    const line = JSON.stringify(invalid) + "\n";
+    const maxQuarantineBytes = Buffer.byteLength(line, "utf8");
+    let spool = new DurableEventSpool(path, { maxQuarantineBytes });
+    const publisher = new CoreEventPublisher({ ...config, fetchImpl: async () => new Response("{}") });
+    const publish = e => publisher.publish(e);
+    await spool.enqueue(invalid);
+    assert.deepEqual(await spool.flush(publish), { delivered: 0, pending: 0 });
+    assert.equal(await readFile(spool.quarantinePath, "utf8"), line);
+    spool = new DurableEventSpool(path, { maxQuarantineBytes });
+    await spool.enqueue(invalid);
+    await spool.enqueue(event("later"));
+    const pending = await readFile(path, "utf8");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await assert.rejects(spool.flush(publish), /quarantine reached its size limit; pending events retained/);
+      assert.equal(await readFile(path, "utf8"), pending);
+      assert.equal(await readFile(spool.quarantinePath, "utf8"), line);
+    }
+    // Explicit operator cleanup lets the retained entries resume.
+    await rm(spool.quarantinePath);
+    assert.deepEqual(await spool.flush(publish), { delivered: 1, pending: 0 });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("an event larger than the quarantine cap remains pending without creating a quarantine file", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "repair-cap-"));
+  try {
+    const spool = new DurableEventSpool(join(directory, "events.jsonl"), { maxQuarantineBytes: 4 });
+    await spool.enqueue(null); // JSON null plus newline requires five bytes.
+    const publisher = new CoreEventPublisher(config);
+    await assert.rejects(spool.flush(e => publisher.publish(e)), /quarantine reached its size limit/);
+    assert.equal(await readFile(spool.filePath, "utf8"), "null\n");
+    await assert.rejects(stat(spool.quarantinePath), { code: "ENOENT" });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("null events are quarantined once without blocking later valid events", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "repair-null-"));
+  try {
+    const spool = new DurableEventSpool(join(directory, "events.jsonl"));
+    const delivered = [];
+    const publisher = new CoreEventPublisher({ ...config, fetchImpl: async (_url, options) => {
+      delivered.push(JSON.parse(options.body).eventId);
+      return new Response("{}");
+    } });
+    await spool.enqueue(null);
+    await spool.enqueue(event("valid"));
+    assert.deepEqual(await spool.flush(e => publisher.publish(e)), { delivered: 1, pending: 0 });
+    assert.deepEqual(delivered, ["valid"]);
+    assert.equal(await readFile(spool.quarantinePath, "utf8"), "null\n");
+    assert.deepEqual(await spool.flush(e => publisher.publish(e)), { delivered: 0, pending: 0 });
+    assert.equal(await readFile(spool.quarantinePath, "utf8"), "null\n");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("quarantine byte limit requires a positive safe integer", () => {
+  for (const maxQuarantineBytes of [0, -1, 1.5, Infinity, NaN, "100", Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => new DurableEventSpool("unused", { maxQuarantineBytes }), /positive safe integer/);
+  }
+});
