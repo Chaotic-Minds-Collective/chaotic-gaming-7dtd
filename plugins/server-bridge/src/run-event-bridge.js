@@ -74,6 +74,12 @@ while (!controller.signal.aborted) {
       lastEventId,
       saveCursor: (eventId) => cursor.save(eventId),
       onSkipped: (info) => console.warn("[7DTD Bridge] Event skipped:", info.reason, info.sourceType),
+      onIdentityResolutionError: (info) => console.warn(
+        "[7DTD Bridge] Player identity resolution unavailable:",
+        info.sourceType,
+        info.provider,
+        info.error
+      ),
     }) ?? lastEventId;
     retryMs = 1_000;
   } catch (error) {
