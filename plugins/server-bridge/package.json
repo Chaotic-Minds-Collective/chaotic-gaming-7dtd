@@ -1,13 +1,13 @@
 {
   "name": "@chaotic-gaming/7dtd-server-bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Secure 7 Days to Die Web API, Server-Sent Events and Chaotic Gaming Core bridge.",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/client.js && node --check src/sse.js && node --check src/stream.js && node --check src/core-publisher.js && node --check src/event-spool.js && node --check src/event-bridge.js && node --check src/run-event-bridge.js",
+    "check": "node --check src/client.js && node --check src/sse.js && node --check src/stream.js && node --check src/core-publisher.js && node --check src/event-spool.js && node --check src/event-cursor.js && node --check src/event-bridge.js && node --check src/run-event-bridge.js",
     "bridge": "node src/run-event-bridge.js"
   }
 }
