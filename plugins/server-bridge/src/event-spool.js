@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export class DurableEventSpool {
@@ -44,6 +44,7 @@ export class DurableEventSpool {
       }
       await mkdir(dirname(this.filePath), { recursive: true });
       await appendFile(this.filePath, `${line}\n`, { encoding: "utf8", mode: 0o600 });
+      await chmod(this.filePath, 0o600);
     });
   }
 
@@ -78,6 +79,7 @@ export class DurableEventSpool {
         await writeFile(temporaryPath, `${pending.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
       }
       await rename(temporaryPath, this.filePath);
+      await chmod(this.filePath, 0o600);
       return { delivered, pending: pending.length };
     });
   }

@@ -46,6 +46,15 @@ const controller = new AbortController();
 process.on("SIGINT", () => controller.abort(new Error("SIGINT")));
 process.on("SIGTERM", () => controller.abort(new Error("SIGTERM")));
 
+// Retry queued events even when the SSE connection is quiet.
+const flushTimer = setInterval(() => {
+  void spool.flush((event) => publisher.publish(event))
+    .then((result) => {
+      if (result.pending > 0) console.warn(`[7DTD Bridge] ${result.pending} event(s) remain queued for Core.`);
+    })
+    .catch((error) => console.error("[7DTD Bridge] Event spool retry failed:", error.message));
+}, 10_000);
+
 let retryMs = 1_000;
 let lastEventId = await cursor.load();
 while (!controller.signal.aborted) {
@@ -74,3 +83,4 @@ while (!controller.signal.aborted) {
     retryMs = Math.min(retryMs * 2, 30_000);
   }
 }
+clearInterval(flushTimer);
