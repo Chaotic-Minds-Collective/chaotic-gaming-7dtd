@@ -33,6 +33,37 @@ export class CoreEventPublisher {
     this.timeoutMs = timeoutMs;
   }
 
+  async resolvePlayer(provider, externalId) {
+    if (typeof provider !== "string" || !/^[a-z0-9._-]{2,32}$/.test(provider)) {
+      throw new TypeError("A valid external identity provider is required.");
+    }
+    if (typeof externalId !== "string" || externalId.length < 1 || externalId.length > 128) {
+      throw new TypeError("A valid external player ID is required.");
+    }
+
+    const response = await this.fetchImpl(
+      new URL(`/integrations/servers/${encodeURIComponent(this.serverId)}/players/resolve`, this.baseUrl),
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.serviceToken}`,
+        },
+        body: JSON.stringify({ provider, externalId }),
+        redirect: "error",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      }
+    );
+    if (!response.ok) {
+      throw new CorePublisherError(`Core rejected player identity resolution (HTTP ${response.status}).`, {
+        status: response.status,
+        code: response.status === 403 ? "CORE_FORBIDDEN" : "CORE_IDENTITY_RESOLUTION_FAILED",
+      });
+    }
+    return response.json();
+  }
+
   async publish(event) {
     if (!event || typeof event.eventId !== "string" || !event.eventId.trim() || event.eventId.length > 200) {
       throw new TypeError("A provider event ID is required for idempotent publishing.");
