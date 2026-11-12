@@ -1,39 +1,36 @@
 # Chaotic Gaming — 7 Days to Die Adapter
 
-Integration service between a 7 Days to Die dedicated server and Chaotic Gaming Core.
+Game-specific integration for 7 Days to Die. The adapter communicates with Chaotic Gaming Core through authenticated APIs and must not access Core's PostgreSQL database directly.
 
-## Integration strategy
+## Planned capabilities
 
-Start with the game's built-in dedicated-server Web API and Server-Sent Events (SSE) interface. This avoids requiring a custom server mod for the initial integration and keeps the adapter outside the game process.
+- Server registration and health heartbeats
+- Player identity mapping and session lifecycle
+- World/server status and validated server events
+- Configuration and administrative operations behind scoped permissions
+- Purchase entitlement delivery only after server-side payment confirmation
 
-The dedicated server's Web API is disabled by default. Enable it deliberately in `serverconfig.xml`, bind it to a trusted network interface, restrict firewall access, and create a dedicated API token with the lowest permission level that supports the required operations.
+## Existing integration foundation
 
-The exact API endpoints and response shapes must be discovered from the running server's own OpenAPI/RapiDoc documentation. Do not hardcode paths based on old tutorials.
+The `plugins/server-bridge` module is the primary integration path. It provides a dependency-free client for the dedicated server's Web API and a Server-Sent Events parser. Endpoint paths are deliberately supplied by the operator from the OpenAPI/RapiDoc documentation exposed by the exact running server build. The adapter does not assume endpoint paths or event names from another version.
 
-## Current status
+## Core integration
 
-- [x] TypeScript adapter package scaffold
-- [x] Token-header HTTP client
-- [x] Generic SSE stream reader
-- [ ] Validate API contract against the exact server build
-- [ ] Add typed player/server endpoints from the live OpenAPI document
-- [ ] Add Core event publishing and retry/outbox integration
-- [ ] Add integration tests against an isolated server
-
-## Authentication
-
-The current Web API specification documents API token name and secret headers:
-- `X-SDTD-API-TOKENNAME`
-- `X-SDTD-API-SECRET`
-
-Use a dedicated read-only token first. Never expose token values to the website or Discord bot. Store them only in the adapter's secret environment.
+The root adapter package adds a Core heartbeat process and a restricted Telnet health-check client. Telnet is optional and is not the preferred integration path for game data. Keep it bound to loopback or a private management network, set a strong password, and never expose it publicly. Only a short allowlist of read-only commands is enabled.
 
 ## Development
 
 - Node.js 22+
 - `npm install`
-- Copy `.env.example` to `.env`
-- `npm run typecheck`
-- `npm run build`
+- `npm test`
+- `npm run check`
 
-No server is contacted during build or tests. No live server configuration is changed by this repository.
+The nested `plugins/server-bridge` module can also be tested independently with `npm --prefix plugins/server-bridge test`.
+
+## Compatibility
+
+Do not assume a particular 7DTD version, server manager, mod loader, Web API endpoint, SSE event name, or RCON/Telnet command set. Record exact versions and validate against a disposable server before claiming support.
+
+## Status
+
+The Web API/SSE client foundation and optional Telnet heartbeat helper are committed with automated tests. No live server has been connected, configured, or modified.

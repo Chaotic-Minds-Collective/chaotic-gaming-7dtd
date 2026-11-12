@@ -1,15 +1,20 @@
-name: CI
+name: 7DTD Adapter CI
 
 on:
-  pull_request:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: 7dtd-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  validate:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +22,8 @@ jobs:
         with:
           node-version: 22
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Build
-        run: npm run build
+        run: npm install
+      - name: Run all adapter tests
+        run: npm test
+      - name: Syntax-check both integration layers
+        run: npm run check
