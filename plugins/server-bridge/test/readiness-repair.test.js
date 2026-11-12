@@ -151,3 +151,50 @@ test("quarantine byte limit requires a positive safe integer", () => {
     assert.throws(() => new DurableEventSpool("unused", { maxQuarantineBytes }), /positive safe integer/);
   }
 });
+
+test("full quarantine checkpoints delivered and quarantined prefixes before rejecting", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "repair-progress-"));
+  try {
+    const path = join(directory, "events.jsonl");
+    let spool = new DurableEventSpool(path, { maxQuarantineBytes: 5 });
+    const delivered = [];
+    const publisher = new CoreEventPublisher({ ...config, fetchImpl: async (_url, options) => {
+      delivered.push(JSON.parse(options.body).eventId);
+      return new Response("{}");
+    } });
+    const publish = e => publisher.publish(e);
+    for (const item of [event("first"), null, null, event("later")]) await spool.enqueue(item);
+    await assert.rejects(spool.flush(publish), /quarantine reached its size limit/);
+    const remaining = `null\n${JSON.stringify(event("later"))}\n`;
+    assert.equal(await readFile(path, "utf8"), remaining);
+    assert.equal(await readFile(spool.quarantinePath, "utf8"), "null\n");
+    assert.deepEqual(delivered, ["first"]);
+    spool = new DurableEventSpool(path, { maxQuarantineBytes: 5 });
+    await assert.rejects(spool.flush(publish), /quarantine reached its size limit/);
+    assert.equal(await readFile(path, "utf8"), remaining);
+    assert.equal(await readFile(spool.quarantinePath, "utf8"), "null\n");
+    await rm(spool.quarantinePath);
+    assert.deepEqual(await spool.flush(publish), { delivered: 1, pending: 0 });
+    assert.deepEqual(delivered, ["first", "later"]);
+    assert.equal(await readFile(spool.quarantinePath, "utf8"), "null\n");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("quarantine write failure checkpoints delivered prefix and retains failed suffix", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "repair-write-progress-"));
+  try {
+    const spool = new DurableEventSpool(join(directory, "events.jsonl"));
+    const delivered = [];
+    const publisher = new CoreEventPublisher({ ...config, fetchImpl: async (_url, options) => {
+      delivered.push(JSON.parse(options.body).eventId);
+      return new Response("{}");
+    } });
+    for (const item of [event("first"), null, event("later")]) await spool.enqueue(item);
+    await mkdir(spool.quarantinePath);
+    await assert.rejects(spool.flush(e => publisher.publish(e)), { code: "EISDIR" });
+    assert.equal(await readFile(spool.filePath, "utf8"), `null\n${JSON.stringify(event("later"))}\n`);
+    await rm(spool.quarantinePath, { recursive: true });
+    assert.deepEqual(await spool.flush(e => publisher.publish(e)), { delivered: 1, pending: 0 });
+    assert.deepEqual(delivered, ["first", "later"]);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

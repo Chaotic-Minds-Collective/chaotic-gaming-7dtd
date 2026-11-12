@@ -61,6 +61,7 @@ export class DurableEventSpool {
 
       const pending = [];
       let delivered = 0;
+      let quarantineFailure;
       for (let index = 0; index < lines.length; index += 1) {
         let event;
         try {
@@ -77,20 +78,26 @@ export class DurableEventSpool {
             pending.push(...lines.slice(index));
             break;
           }
-          let quarantineBytes = 0;
           try {
-            quarantineBytes = (await stat(this.quarantinePath)).size;
-          } catch (quarantineError) {
-            if (quarantineError?.code !== "ENOENT") throw quarantineError;
+            let quarantineBytes = 0;
+            try {
+              quarantineBytes = (await stat(this.quarantinePath)).size;
+            } catch (quarantineError) {
+              if (quarantineError?.code !== "ENOENT") throw quarantineError;
+            }
+            const quarantineLine = `${lines[index]}\n`;
+            if (quarantineBytes + Buffer.byteLength(quarantineLine, "utf8") > this.maxQuarantineBytes) {
+              throw new Error("Core event quarantine reached its size limit; pending events retained. Archive or remove quarantine entries before retrying.");
+            }
+            // Persist before removing from pending; retain this event on failure.
+            await appendFile(this.quarantinePath, quarantineLine, { encoding: "utf8", mode: 0o600 });
+            await chmod(this.quarantinePath, 0o600);
+            console.warn("[7DTD Bridge] Quarantined Core event:", event?.eventId ?? "(missing event ID)");
+          } catch (error) {
+            pending.push(...lines.slice(index));
+            quarantineFailure = error;
+            break;
           }
-          const quarantineLine = `${lines[index]}\n`;
-          if (quarantineBytes + Buffer.byteLength(quarantineLine, "utf8") > this.maxQuarantineBytes) {
-            throw new Error("Core event quarantine reached its size limit; pending events retained. Archive or remove quarantine entries before retrying.");
-          }
-          // Persist before removing from pending. A failed write leaves the queue intact.
-          await appendFile(this.quarantinePath, quarantineLine, { encoding: "utf8", mode: 0o600 });
-          await chmod(this.quarantinePath, 0o600);
-          console.warn("[7DTD Bridge] Quarantined Core event:", event?.eventId ?? "(missing event ID)");
         }
       }
 
@@ -102,6 +109,7 @@ export class DurableEventSpool {
       }
       await rename(temporaryPath, this.filePath);
       await chmod(this.filePath, 0o600);
+      if (quarantineFailure) throw quarantineFailure;
       return { delivered, pending: pending.length };
     });
   }

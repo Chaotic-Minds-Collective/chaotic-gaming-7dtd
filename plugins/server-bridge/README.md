@@ -27,10 +27,16 @@ The bridge:
 
 <!-- coderabbit-ai-generated-section:v1:48b7115750bc78927084d29ac387c1da5f315342c494f3b1ff3352f11aa48f8c -->
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:c002d126b425d4ec2a69eb5a0c90cc05948d88ecbcebf88434a1097a7dd2c4c2 -->
+
 The spool defaults to `./data/core-events.jsonl`. Keep the data directory private to the service account; it may contain player event payloads. The queue has event and byte limits and refuses new events rather than silently dropping old ones.
 
-Locally invalid events are saved in `<spool path>.quarantine.jsonl` before removal from the pending queue. Quarantine is capped at 50 MiB by default; callers of `DurableEventSpool` can configure `maxQuarantineBytes` as a positive integer byte limit. The limit includes UTF-8 JSON and newline bytes and survives restarts. If an append would exceed the limit, flushing fails with a clear error and leaves the pending spool intact. Stop the bridge, archive or remove quarantine entries, then restart to resume delivery; entries are never automatically discarded.
+Locally invalid events are saved in `<spool path>.quarantine.jsonl` before removal from the pending queue. Quarantine is capped at 50 MiB by default; callers of `DurableEventSpool` can configure `maxQuarantineBytes` as a positive integer byte limit. The limit includes UTF-8 JSON and newline bytes and survives restarts. If quarantine capacity or persistence fails, flushing checkpoints removal of successfully delivered or quarantined events before reporting the error. The failed event and all later events remain pending for retry. Checkpoint failures can leave completed events pending, so retries may repeat them. Stop the bridge, archive or remove quarantine entries, then restart to resume delivery; entries are never automatically discarded.
 
+
+<!-- /coderabbit-ai-generated:v1 -->
 <!-- /coderabbit-ai-generated:v1 -->
 
 ## Setup
