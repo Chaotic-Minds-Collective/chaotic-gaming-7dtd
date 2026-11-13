@@ -1,6 +1,6 @@
-# Chaotic Gaming — 7 Days to Die Adapter
+# CMG 7DTD Plugin
 
-Game-specific integration for 7 Days to Die. The adapter communicates with Chaotic Gaming Core through authenticated APIs and must not access Core's PostgreSQL database directly.
+Game-specific integration for 7 Days to Die within Chaotic Minds Gaming (CMG). The adapter communicates with Chaotic Gaming Core through authenticated APIs and must not access Core's PostgreSQL database directly.
 
 ## Planned capabilities
 
