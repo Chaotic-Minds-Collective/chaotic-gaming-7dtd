@@ -1,6 +1,6 @@
 # 7DTD Player Identity Integration
 
-The bridge can optionally resolve a game event's external player ID to a verified Chaotic Gaming player account.
+The bridge can optionally resolve a game event's external player ID to a verified Chaotic Minds Gaming player account.
 
 ## Permission
 
