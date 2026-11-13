@@ -1,10 +1,16 @@
 import { appendFile, chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { CoreEventValidationError } from "./core-publisher.js";
 import { dirname } from "node:path";
 
 export class DurableEventSpool {
-  constructor(filePath, { maxEvents = 10_000, maxBytes = 50 * 1024 * 1024 } = {}) {
+  constructor(filePath, { maxEvents = 10_000, maxBytes = 50 * 1024 * 1024, maxQuarantineBytes = 50 * 1024 * 1024 } = {}) {
     if (!filePath) throw new TypeError("A local event spool path is required.");
+    if (!Number.isSafeInteger(maxQuarantineBytes) || maxQuarantineBytes < 1) {
+      throw new TypeError("maxQuarantineBytes must be a positive safe integer.");
+    }
+    this.maxQuarantineBytes = maxQuarantineBytes;
     this.filePath = filePath;
+    this.quarantinePath = `${filePath}.quarantine.jsonl`;
     this.maxEvents = maxEvents;
     this.maxBytes = maxBytes;
     this.operation = Promise.resolve();
@@ -55,6 +61,7 @@ export class DurableEventSpool {
 
       const pending = [];
       let delivered = 0;
+      let quarantineFailure;
       for (let index = 0; index < lines.length; index += 1) {
         let event;
         try {
@@ -66,9 +73,31 @@ export class DurableEventSpool {
         try {
           await publish(event);
           delivered += 1;
-        } catch {
-          pending.push(...lines.slice(index));
-          break;
+        } catch (error) {
+          if (!(error instanceof CoreEventValidationError)) {
+            pending.push(...lines.slice(index));
+            break;
+          }
+          try {
+            let quarantineBytes = 0;
+            try {
+              quarantineBytes = (await stat(this.quarantinePath)).size;
+            } catch (quarantineError) {
+              if (quarantineError?.code !== "ENOENT") throw quarantineError;
+            }
+            const quarantineLine = `${lines[index]}\n`;
+            if (quarantineBytes + Buffer.byteLength(quarantineLine, "utf8") > this.maxQuarantineBytes) {
+              throw new Error("Core event quarantine reached its size limit; pending events retained. Archive or remove quarantine entries before retrying.");
+            }
+            // Persist before removing from pending; retain this event on failure.
+            await appendFile(this.quarantinePath, quarantineLine, { encoding: "utf8", mode: 0o600 });
+            await chmod(this.quarantinePath, 0o600);
+            console.warn("[7DTD Bridge] Quarantined Core event:", event?.eventId ?? "(missing event ID)");
+          } catch (error) {
+            pending.push(...lines.slice(index));
+            quarantineFailure = error;
+            break;
+          }
         }
       }
 
@@ -80,6 +109,7 @@ export class DurableEventSpool {
       }
       await rename(temporaryPath, this.filePath);
       await chmod(this.filePath, 0o600);
+      if (quarantineFailure) throw quarantineFailure;
       return { delivered, pending: pending.length };
     });
   }

@@ -173,7 +173,7 @@ test("requires a provider event ID and allowlisted normalized event type", async
   const publisher = new CoreEventPublisher({
     baseUrl: "https://core.example.test",
     serviceToken: "synthetic-service-token",
-    serverId: "server",
+    serverId: "123e4567-e89b-42d3-a456-426614174000",
     fetchImpl: async () => new Response("{}", { status: 202 }),
   });
   await assert.rejects(publisher.publish({ eventType: "player.joined", occurredAt: new Date().toISOString() }), /provider event ID/);
@@ -216,3 +216,4 @@ test("persists the last acknowledged provider event cursor", async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+

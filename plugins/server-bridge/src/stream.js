@@ -39,6 +39,11 @@ export async function openServerEventStream(client, path, { signal, lastEventId 
   }
 
   if (!response.ok) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // Preserve the HTTP validation error if cleanup fails.
+    }
     throw new SevenDaysApiError(
       `7 Days to Die event stream returned HTTP ${response.status}`,
       { status: response.status }

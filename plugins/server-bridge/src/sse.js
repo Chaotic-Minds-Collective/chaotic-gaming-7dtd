@@ -2,15 +2,19 @@
  * Parse a WHATWG ReadableStream containing Server-Sent Events.
  * Handles chunk boundaries, comments, multiline data, IDs and retry values.
  */
-export async function* parseServerSentEvents(stream, { signal } = {}) {
+export async function* parseServerSentEvents(stream, { signal, maxLineLength = 1_048_576, maxEventLength = 4_194_304 } = {}) {
   if (!stream || typeof stream.getReader !== "function") {
     throw new TypeError("stream must be a ReadableStream");
   }
 
+  for (const limit of [maxLineLength, maxEventLength]) {
+    if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError("SSE size limits must be positive safe integers");
+  }
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let event = { data: [] };
+  let eventLength = 0;
   let lastEventId;
   let reachedEof = false;
   let cancellation;
@@ -23,6 +27,7 @@ export async function* parseServerSentEvents(stream, { signal } = {}) {
   };
 
   const dispatch = () => {
+    eventLength = 0;
     if (event.data.length === 0) {
       event = { data: [] };
       return null;
@@ -53,6 +58,7 @@ export async function* parseServerSentEvents(stream, { signal } = {}) {
       let boundary;
       while ((boundary = buffer.indexOf("\n")) !== -1) {
         throwIfAborted();
+        if (boundary > maxLineLength) throw new RangeError("SSE line exceeds maximum length");
         const line = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 1);
         if (line === "") {
@@ -69,12 +75,19 @@ export async function* parseServerSentEvents(stream, { signal } = {}) {
         let valueText = colon === -1 ? "" : line.slice(colon + 1);
         if (valueText.startsWith(" ")) valueText = valueText.slice(1);
 
-        if (field === "data") event.data.push(valueText);
+        if (field === "data") {
+          eventLength += valueText.length + 1;
+          if (eventLength > maxEventLength) throw new RangeError("SSE event exceeds maximum length");
+          event.data.push(valueText);
+        }
         else if (field === "event") event.event = valueText;
         else if (field === "id" && !valueText.includes("\0")) lastEventId = valueText;
         else if (field === "retry" && /^\d+$/.test(valueText)) event.retry = Number(valueText);
       }
 
+      if (buffer.length - (buffer.endsWith("\r") ? 1 : 0) > maxLineLength) {
+        throw new RangeError("SSE line exceeds maximum length");
+      }
       if (done) return;
     }
   } finally {
