@@ -30,7 +30,7 @@ test("Core publisher normalizes timestamps and rejects oversized or invalid payl
     occurredAt: "2026-11-12T16:00:00-08:00",
     payload: { externalPlayerId: "steam-42" },
   });
-  assert.equal(requestBody.eventId, "event-42");
+  assert.equal(requestBody.eventId, " event-42 ");
   assert.equal(requestBody.occurredAt, "2026-11-13T00:00:00.000Z");
 
   await assert.rejects(
@@ -67,4 +67,27 @@ test("Core event publisher does not expose service credentials on network failur
     }),
     (error) => error.code === "CORE_REQUEST_FAILED" && !error.message.includes("synthetic-service-token"),
   );
+});
+
+test("Core publisher preserves distinct opaque provider IDs after serialization", async () => {
+  const publishedIds = [];
+  const publisher = new CoreEventPublisher({
+    ...validConfig,
+    fetchImpl: async (_url, options) => {
+      publishedIds.push(JSON.parse(options.body).eventId);
+      return new Response("{}");
+    },
+  });
+  const sourceIds = ["abc", " abc ", "\tabc\t"];
+  for (const eventId of sourceIds) {
+    // Serialization models persistence of the source identity in the spool.
+    const event = JSON.parse(JSON.stringify({
+      eventId, eventType: "player.chat", occurredAt: "2026-11-13T00:00:00Z", payload: {},
+    }));
+    await publisher.publish(event);
+    assert.equal(event.eventId, eventId);
+  }
+  assert.deepEqual(publishedIds, sourceIds);
+  await assert.rejects(publisher.publish({ eventId: " \t " }), /provider event ID/);
+  assert.equal(publishedIds.length, sourceIds.length);
 });

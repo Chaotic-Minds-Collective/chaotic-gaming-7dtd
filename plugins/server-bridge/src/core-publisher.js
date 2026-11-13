@@ -103,7 +103,7 @@ export class CoreEventPublisher {
 
     const body = {
       game: "7dtd",
-      eventId: event.eventId.trim(),
+      eventId: event.eventId,
       eventType: event.eventType,
       occurredAt: occurredAt.toISOString(),
       payload,
