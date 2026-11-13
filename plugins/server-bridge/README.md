@@ -1,6 +1,6 @@
 # 7DTD Server Bridge (0.2.0)
 
-A dependency-free Node.js bridge for the 7 Days to Die dedicated-server Web API, Server-Sent Events, and Chaotic Gaming Core.
+A dependency-free Node.js bridge for the 7 Days to Die dedicated-server Web API, Server-Sent Events, and Chaotic Minds Gaming Core.
 
 ## Web API
 
