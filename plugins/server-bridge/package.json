@@ -1,8 +1,8 @@
 {
-  "name": "@chaotic-gaming/7dtd-server-bridge",
+  "name": "@chaotic-minds-gaming/7dtd-server-bridge",
   "version": "0.2.1",
   "private": true,
-  "description": "Secure 7 Days to Die Web API, Server-Sent Events and Chaotic Gaming Core bridge.",
+  "description": "Secure 7 Days to Die Web API, Server-Sent Events and Chaotic Minds Gaming Core bridge.",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
